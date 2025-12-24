@@ -469,7 +469,7 @@ Plugins.ais_overlay.init = async function () {
         fetchAIS();
         setInterval(fetchAIS, 5000);
 
-    }, 1000);
+    }, 5000);
 
     return true;
 };
