@@ -1,0 +1,41 @@
+[Unit]
+Description=AIS to OpenWebRX Map Service with MQTT monitoring
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root
+KillMode=control-group
+Restart=always
+RestartSec=5
+
+# Publish ONLINE and start Python AIS forwarder with heartbeat loop
+ExecStart=/bin/bash -c '\
+  BROKER="manousos.us.to"; \
+  PORT=1883; \
+  USER="mqttuser"; \
+  PASS="mqttpwd"; \
+  STATUS_TOPIC="ais_to_openwebrx_service/status"; \
+  HEARTBEAT_TOPIC="ais_to_openwebrx_service/heartbeat"; \
+  \
+  # Publish online retained
+  /usr/bin/mosquitto_pub -h "$BROKER" -p "$PORT" -u "$USER" -P "$PASS" -t "$STATUS_TOPIC" -m "online" -r & \
+  \
+  # Function to send offline on exit
+  trap "/usr/bin/mosquitto_pub -h $BROKER -p $PORT -u $USER -P $PASS -t $STATUS_TOPIC -m 'offline' -r" EXIT; \
+  \
+  # Start the Python AIS forwarder
+  /usr/bin/python3 /root/ais_to_openwebrx_map.py & \
+  AIS_PID=$!; \
+  \
+  # Heartbeat loop
+  while kill -0 $AIS_PID 2>/dev/null; do \
+    /usr/bin/mosquitto_pub -h "$BROKER" -p "$PORT" -u "$USER" -P "$PASS" -t "$HEARTBEAT_TOPIC" -m "running_ok $(date -Is)" -r; \
+    sleep 60; \
+  done; \
+  wait $AIS_PID'
+
+[Install]
+WantedBy=multi-user.target
